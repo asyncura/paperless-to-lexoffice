@@ -109,4 +109,13 @@ jobs:
           DIGEST: ${{ steps.build-and-push.outputs.digest }}
         # This step uses the identity token to provision an ephemeral certificate
         # against the sigstore community Fulcio instance.
-        run: echo "${TAGS}" | xargs -I {} cosign sign --yes {}@${DIGEST}
+        run: |
+          # Add recursive flag and handle each registry separately
+          for tag in ${TAGS}; do
+            if [[ $tag == ghcr.io/* ]]; then
+              cosign sign --yes "${tag}@${DIGEST}"
+            elif [[ $tag == docker.io/* ]]; then
+              cosign sign --yes "${tag}@${DIGEST}"
+            fi
+          done
+
