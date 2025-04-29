@@ -2,14 +2,15 @@ import requests
 from time import sleep
 
 
-def upload_voucher(access_token, url, filepath):
+def upload_voucher(access_token, url, file_content, _id):
     """
     Upload a document as a voucher to lexoffice.
 
     Args:
         access_token (str): Authentication token for lexoffice API
         url (str): URL of the lexoffice API endpoint
-        filepath (str): Path to the file to be uploaded
+        file_content (bytes): Binary content of the file to be uploaded
+        _id (int): ID of the document in paperless-ngx
 
     Returns:
         requests.Response: The response object from the API request
@@ -20,7 +21,7 @@ def upload_voucher(access_token, url, filepath):
     }
 
     files = {
-        "file": open(filepath, "rb"),
+        "file": (f"{_id}.pdf", file_content, "application/pdf"),
         "type": (None, "voucher"),
     }
 

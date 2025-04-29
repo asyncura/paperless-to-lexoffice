@@ -2,6 +2,7 @@ import paperless
 import lexoffice
 import os
 import asyncio
+from db import UploadStore
 
 # Config
 
@@ -17,9 +18,11 @@ lexoffice_tag_id = os.getenv('PL2LO_LEXOFFICE_TAG_ID')
 lexoffice_token = os.getenv('PL2LO_LEXOFFICE_TOKEN')
 lexoffice_url = os.getenv('PL2LO_LEXOFFICE_URL')
 
-# Helper files and directories
-tmp_dir = "tmp"
+# Lock file for preventing multiple instances
 LOCK_FILE = 'script.lock'
+
+# Database
+db = UploadStore()
 
 
 def create_lock():
@@ -46,7 +49,7 @@ async def sync_paperless_to_lexoffice():
     This function:
     1. Checks if the script is already running (using a lock file)
     2. Retrieves documents from paperless-ngx that are tagged for lexoffice upload
-    3. Downloads each document and saves it to a temporary file
+    3. Downloads each document's content into memory
     4. Uploads each document to lexoffice
     5. If upload is successful, removes the inbox tag from the document in paperless-ngx
 
@@ -61,36 +64,33 @@ async def sync_paperless_to_lexoffice():
     create_lock()
 
     try:
-        # Your main script logic here
+        # Main script logic
         print("Check for new documents in paperless-ngx tagged for upload...")
-        # document_ids = paperless.search_documents(paperless_token, paperless_url, search_string)
         document_ids = paperless.filter_documents_by_tags(paperless_token, paperless_url,
                                                           [inbox_tag_id, lexoffice_tag_id])
 
         # None type if error occurred (e.g., paperless-ngx not reachable)
         if document_ids is not None:
 
-            # Download PDFs into temp folder
-            for id in document_ids:
-                file_content = paperless.download_document(paperless_token, paperless_url, id)
-                filepath = os.path.join(tmp_dir, f"{id}.pdf")
+            # Download document content
+            for _id in document_ids:
+                if not db.is_uploaded(_id):
+                    file_content = paperless.download_document(paperless_token, paperless_url, _id)
+                    if file_content is not None:
+                        # Upload PDF to lexoffice
+                        response = lexoffice.upload_voucher(lexoffice_token, lexoffice_url, file_content, _id)
 
-                with open(filepath, "wb") as file:
-                    file.write(file_content)
-
-                # Upload PDF to lexoffice
-                response = lexoffice.upload_voucher(lexoffice_token, lexoffice_url, filepath)
-
-                # Upload successful
-                if response.status_code == 202:
-                    print("Upload successful. Deleting file from tmp...")
-                    os.remove(filepath)
-
-                    paperless.remove_tag(paperless_token, paperless_url, id, [inbox_tag_id])
-
-                # Upload failed    
-                else:
-                    print(f"Upload not successful. Leave file in tmp. HTTP error {response.status_code}")
+                        # Upload successful
+                        if response.status_code == 202:
+                            paperless.remove_tag(paperless_token, paperless_url, _id, [inbox_tag_id])
+                            db.mark_as_uploaded(_id)
+                            print(f"Document {_id} uploaded successfully.")
+                        # Upload failed
+                        else:
+                            print(f"Upload failed. Trying again later. HTTP error {response.status_code}")
+                    # Download failed
+                    else:
+                        print(f"Failed to download document {_id}")
 
     except Exception as e:
         print(f"An error occurred: {e}")
@@ -98,8 +98,6 @@ async def sync_paperless_to_lexoffice():
     finally:
         # Ensure the lock file is removed even if an error occurs
         remove_lock()
-
-    return None
 
 
 async def periodic_main(interval_seconds):

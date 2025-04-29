@@ -2,6 +2,34 @@ import requests
 import json
 
 
+def __retrieve_document(url, headers):
+    """
+    Internal helper function to retrieve document IDs from paperless-ngx API.
+
+    Args:
+        url (str): The API endpoint URL to query
+        headers (dict): HTTP headers including authorization token
+
+    Returns:
+        list: List of document IDs, or empty list if error occurs
+    """
+    try:
+        response = requests.get(url, headers=headers)
+
+        if response.status_code == 200:
+            search_data = response.json()
+            document_ids = search_data.get('all', [])
+            print(f"Search Results: {document_ids}")
+            return document_ids
+        else:
+            print(f"Search was raising HTTP error: {response.status_code}")
+            return []
+
+    except Exception as e:
+        print(f"Error connecting to paperless-ngx, is it running? Error: {e}")
+        return []
+
+
 def search_documents(access_token, base_url, search_string):
     """
     Search for documents in paperless-ngx using a search string.
@@ -20,22 +48,7 @@ def search_documents(access_token, base_url, search_string):
         "Authorization": f"Token {access_token}",
         "Accept": "application/json",
     }
-
-    try:
-        response = requests.get(url, headers=headers)
-
-        if response.status_code == 200:
-            search_data = response.json()
-            document_ids = search_data.get('all', [])
-            print(f"Search Results: {document_ids}")
-            return document_ids
-        else:
-            print(f"Search was raising HTTP error: {response.status_code}")
-            return []
-
-    except Exception as e:
-        print(f"Error connecting to paperless-ngx, is it running? Error: {e}")
-        return []
+    return __retrieve_document(url, headers)
 
 
 def filter_documents_by_tags(access_token, base_url, tags: list):
@@ -59,22 +72,7 @@ def filter_documents_by_tags(access_token, base_url, tags: list):
         "Accept": "application/json",
     }
 
-    try:
-        response = requests.get(url, headers=headers)
-
-        if response.status_code == 200:
-            search_data = response.json()
-            document_ids = search_data.get('all', [])
-            print(f"Search Results: {document_ids}")
-
-            return document_ids
-        else:
-            print(f"Search was raising HTTP error: {response.status_code}")
-            return []
-
-    except Exception as e:
-        print(f"Error connecting to paperless-ngx, is it running? Error: {e}")
-        return []
+    return __retrieve_document(url, headers)
 
 
 def download_document(access_token, base_url, _id):
@@ -190,9 +188,7 @@ def remove_tag(access_token, base_url, document_id, tag_ids):
             for tag_id in tag_ids:
                 current_tags.remove(int(tag_id))
 
-            new_tags = current_tags
-
-            payload = json.dumps({"tags": new_tags})
+            payload = json.dumps({"tags": current_tags})
 
             response = requests.request("PATCH", url, headers=headers, data=payload)
 
