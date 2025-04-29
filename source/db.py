@@ -9,7 +9,7 @@ class UploadStore:
     This class provides methods to check if a document has been uploaded
     and to mark documents as uploaded, using a SQLite database for storage.
     """
-    def __init__(self, db_path="upload_store.db"):
+    def __init__(self, db_path="/data/upload_store.db"):
         """
         Initialize the UploadStore with a database file path.
 

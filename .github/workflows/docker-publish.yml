@@ -119,3 +119,13 @@ jobs:
             fi
           done
 
+      # Upload README.md to Docker Hub
+      - uses: actions/checkout@v4
+      - name: Docker Hub Description
+        uses: peter-evans/dockerhub-description@432a30c9e07499fd01da9f8a49f0faf9e0ca5b77 # 4.0.2
+        with:
+            username: ${{ secrets.DOCKERHUB_USERNAME }}
+            password: ${{ secrets.DOCKERHUB_PASSWORD }}
+            repository: asyncura/paperless-to-lexoffice
+            short-description: ${{ github.event.repository.description }}
+            enable-url-completion: true
