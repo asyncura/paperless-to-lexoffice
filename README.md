@@ -32,12 +32,10 @@ docker run -d \
   --name paperless-to-lexoffice \
   --restart unless-stopped \
   -v ./data:/data \
-  -e PL2LO_POLLING_INTERVAL_S=60 \
   -e PL2LO_PAPERLESS_TOKEN="your-paperless-token-here" \
-  -e PL2LO_PAPERLESS_URL="http://your-paperless-instance:8000" \
+  -e PL2LO_PAPERLESS_URL="http://your-paperless-instance:port" \
   -e PL2LO_LEXOFFICE_TAG_ID=42 \
   -e PL2LO_LEXOFFICE_TOKEN="your-lexoffice-api-token-here" \
-  -e PL2LO_LEXOFFICE_URL="https://api.lexoffice.io/v1/files" \
   asyncura/paperless-to-lexoffice:latest
 ```
 
