@@ -11,7 +11,6 @@ polling_interval = int(os.getenv("PL2LO_POLLING_INTERVAL_S"))
 # paperless-ngx
 paperless_token = os.getenv('PL2LO_PAPERLESS_TOKEN')
 paperless_url = os.getenv('PL2LO_PAPERLESS_URL')
-inbox_tag_id = os.getenv('PL2LO_INBOX_TAG_ID')
 lexoffice_tag_id = os.getenv('PL2LO_LEXOFFICE_TAG_ID')
 
 # lexoffice
@@ -51,7 +50,6 @@ async def sync_paperless_to_lexoffice():
     2. Retrieves documents from paperless-ngx that are tagged for lexoffice upload
     3. Downloads each document's content into memory
     4. Uploads each document to lexoffice
-    5. If upload is successful, removes the inbox tag from the document in paperless-ngx
 
     Returns:
         None
@@ -66,8 +64,7 @@ async def sync_paperless_to_lexoffice():
     try:
         # Main script logic
         print("Check for new documents in paperless-ngx tagged for upload...")
-        document_ids = paperless.filter_documents_by_tags(paperless_token, paperless_url,
-                                                          [inbox_tag_id, lexoffice_tag_id])
+        document_ids = paperless.filter_documents_by_tags(paperless_token, paperless_url, [lexoffice_tag_id])
 
         # None type if error occurred (e.g., paperless-ngx not reachable)
         if document_ids is not None:
@@ -82,7 +79,6 @@ async def sync_paperless_to_lexoffice():
 
                         # Upload successful
                         if response.status_code == 202:
-                            paperless.remove_tag(paperless_token, paperless_url, _id, [inbox_tag_id])
                             db.mark_as_uploaded(_id)
                             print(f"Document {_id} uploaded successfully.")
                         # Upload failed
