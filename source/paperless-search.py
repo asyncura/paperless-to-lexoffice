@@ -6,7 +6,7 @@ from db import UploadStore
 
 # Config
 
-polling_interval = int(os.getenv("PL2LO_POLLING_INTERVAL_S"))
+polling_interval = int(os.getenv("PL2LO_POLLING_INTERVAL_S", "60"))
 
 # paperless-ngx
 paperless_token = os.getenv('PL2LO_PAPERLESS_TOKEN')
@@ -15,7 +15,7 @@ lexoffice_tag_id = os.getenv('PL2LO_LEXOFFICE_TAG_ID')
 
 # lexoffice
 lexoffice_token = os.getenv('PL2LO_LEXOFFICE_TOKEN')
-lexoffice_url = os.getenv('PL2LO_LEXOFFICE_URL')
+lexoffice_url = os.getenv('PL2LO_LEXOFFICE_URL', "https://api.lexoffice.io/v1/files")
 
 # Lock file for preventing multiple instances
 LOCK_FILE = 'script.lock'
