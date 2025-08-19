@@ -2,20 +2,44 @@ import paperless
 import lexoffice
 import os
 import asyncio
+import logging
 from db import UploadStore
+
+logger = logging.getLogger(__name__)
 
 # Config
 
-polling_interval = int(os.getenv("PL2LO_POLLING_INTERVAL_S", "60"))
+def _get_env(name, default=None, required=False):
+    val = os.getenv(name, default)
+    if required and (val is None or (isinstance(val, str) and val.strip() == "")):
+        raise RuntimeError(f"Missing required environment variable: {name}")
+    return val
+
+# Polling
+try:
+    polling_interval = int(_get_env("PL2LO_POLLING_INTERVAL_S", "60"))
+    if polling_interval <= 0:
+        raise ValueError
+except Exception:
+    raise RuntimeError("PL2LO_POLLING_INTERVAL_S must be a positive integer")
 
 # paperless-ngx
-paperless_token = os.getenv('PL2LO_PAPERLESS_TOKEN')
-paperless_url = os.getenv('PL2LO_PAPERLESS_URL')
-lexoffice_tag_id = os.getenv('PL2LO_LEXOFFICE_TAG_ID')
+paperless_token = _get_env('PL2LO_PAPERLESS_TOKEN', required=True)
+paperless_url = _get_env('PL2LO_PAPERLESS_URL', required=True)
+lexoffice_tag_id_raw = _get_env('PL2LO_LEXOFFICE_TAG_ID', required=True)
+try:
+    lexoffice_tag_id = int(str(lexoffice_tag_id_raw).strip())
+except Exception:
+    raise RuntimeError("PL2LO_LEXOFFICE_TAG_ID must be an integer")
+
+if not str(paperless_url).startswith(("http://", "https://")):
+    raise RuntimeError("PL2LO_PAPERLESS_URL must start with http:// or https://")
 
 # lexoffice
-lexoffice_token = os.getenv('PL2LO_LEXOFFICE_TOKEN')
-lexoffice_url = os.getenv('PL2LO_LEXOFFICE_URL', "https://api.lexoffice.io/v1/files")
+lexoffice_token = _get_env('PL2LO_LEXOFFICE_TOKEN', required=True)
+lexoffice_url = _get_env('PL2LO_LEXOFFICE_URL', "https://api.lexoffice.io/v1/files")
+if not str(lexoffice_url).startswith(("http://", "https://")):
+    raise RuntimeError("PL2LO_LEXOFFICE_URL must start with http:// or https://")
 
 # Lock file for preventing multiple instances
 LOCK_FILE = 'script.lock'
@@ -55,7 +79,7 @@ async def sync_paperless_to_lexoffice():
         None
     """
     if is_locked():
-        print("Script is already running. Exiting.")
+        logger.warning("Script is already running. Exiting.")
         return
 
     # Create the lock file
@@ -63,7 +87,7 @@ async def sync_paperless_to_lexoffice():
 
     try:
         # Main script logic
-        print("Check for new documents in paperless-ngx tagged for upload...")
+        logger.info("Check for new documents in paperless-ngx tagged for upload...")
         document_ids = paperless.filter_documents_by_tags(paperless_token, paperless_url, [lexoffice_tag_id])
 
         # None type if error occurred (e.g., paperless-ngx not reachable)
@@ -75,21 +99,19 @@ async def sync_paperless_to_lexoffice():
                     file_content = paperless.download_document(paperless_token, paperless_url, _id)
                     if file_content is not None:
                         # Upload PDF to lexoffice
-                        response = lexoffice.upload_voucher(lexoffice_token, lexoffice_url, file_content, _id)
-
-                        # Upload successful
-                        if response.status_code == 202:
+                        try:
+                            response = lexoffice.upload_voucher(lexoffice_token, lexoffice_url, file_content, _id)
                             db.mark_as_uploaded(_id)
-                            print(f"Document {_id} uploaded successfully.")
-                        # Upload failed
-                        else:
-                            print(f"Upload failed. Trying again later. HTTP error {response.status_code}")
+                            logger.info(f"Document {_id} uploaded successfully.")
+                        except Exception as e:
+                            # Any failure raised by upload_voucher
+                            logger.error(f"Upload failed for document {_id}. Trying again later. Error: {e}")
                     # Download failed
                     else:
-                        print(f"Failed to download document {_id}")
+                        logger.error(f"Failed to download document {_id}")
 
     except Exception as e:
-        print(f"An error occurred: {e}")
+        logger.exception(f"An error occurred: {e}")
 
     finally:
         # Ensure the lock file is removed even if an error occurs
@@ -121,6 +143,11 @@ def main():
     Returns:
         None
     """
+    # Configure logging level and format from env var PL2LO_LOG_LEVEL (default INFO)
+    level_name = os.getenv("PL2LO_LOG_LEVEL", "INFO").upper()
+    level = getattr(logging, level_name, logging.INFO)
+    logging.basicConfig(level=level, format="%(asctime)s %(levelname)s [%(name)s] %(message)s")
+    logger.info(f"Starting paperless-to-lexoffice with polling interval {polling_interval}s")
     asyncio.run(periodic_main(polling_interval))
     return None
 

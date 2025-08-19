@@ -1,32 +1,36 @@
 import requests
 import json
+import logging
 
+logger = logging.getLogger(__name__)
 
-def __retrieve_document(url, headers):
+def __retrieve_document(url, headers, params=None, timeout=15):
     """
     Internal helper function to retrieve document IDs from paperless-ngx API.
 
     Args:
         url (str): The API endpoint URL to query
         headers (dict): HTTP headers including authorization token
+        params (dict|None): Optional query string parameters
+        timeout (int|float): Request timeout in seconds
 
     Returns:
         list: List of document IDs, or empty list if error occurs
     """
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, params=params, timeout=timeout)
 
         if response.status_code == 200:
             search_data = response.json()
             document_ids = search_data.get('all', [])
-            print(f"Search Results: {document_ids}")
+            logger.info(f"Search Results: {document_ids}")
             return document_ids
         else:
-            print(f"Search was raising HTTP error: {response.status_code}")
+            logger.error(f"Search was raising HTTP error: {response.status_code}")
             return []
 
-    except Exception as e:
-        print(f"Error connecting to paperless-ngx, is it running? Error: {e}")
+    except requests.RequestException as e:
+        logger.error(f"Error connecting to paperless-ngx, is it running? Error: {e}")
         return []
 
 
@@ -42,13 +46,14 @@ def search_documents(access_token, base_url, search_string):
     Returns:
         list: List of document IDs matching the search criteria, or empty list if error occurs
     """
-    url = f"{base_url}/api/documents/?query=({search_string})"
+    url = f"{base_url}/api/documents/"
 
     headers = {
         "Authorization": f"Token {access_token}",
         "Accept": "application/json",
     }
-    return __retrieve_document(url, headers)
+    params = {"query": f"({search_string})"}
+    return __retrieve_document(url, headers, params=params)
 
 
 def filter_documents_by_tags(access_token, base_url, tags: list):
@@ -65,14 +70,15 @@ def filter_documents_by_tags(access_token, base_url, tags: list):
     """
     tags_string = ",".join(str(tag) for tag in tags)
 
-    url = f"{base_url}/api/documents/?tags__id__all={tags_string}"
+    url = f"{base_url}/api/documents/"
 
     headers = {
         "Authorization": f"Token {access_token}",
         "Accept": "application/json",
     }
+    params = {"tags__id__all": tags_string}
 
-    return __retrieve_document(url, headers)
+    return __retrieve_document(url, headers, params=params)
 
 
 def download_document(access_token, base_url, _id):
@@ -95,20 +101,20 @@ def download_document(access_token, base_url, _id):
     }
 
     try:
-        response = requests.get(url, headers=headers, stream=True)
+        response = requests.get(url, headers=headers, stream=True, timeout=60)
         document_binary = b''
         if response.status_code == 200:
             for chunk in response.iter_content(chunk_size=8192):
                 document_binary += chunk
 
-            print(f"Document #{_id} downloaded successfully.")
+            logger.info(f"Document #{_id} downloaded successfully.")
             return document_binary
         else:
-            print(f"Failed to download document. Status code: {response.status_code}")
+            logger.error(f"Failed to download document. Status code: {response.status_code}")
             return None
 
-    except Exception as e:
-        print(f"Error connecting to paperless-ngx, is it running? Error: {e}")
+    except requests.RequestException as e:
+        logger.error(f"Error connecting to paperless-ngx, is it running? Error: {e}")
         return None
 
 
@@ -143,16 +149,16 @@ def set_custom_field(access_token, base_url, document_id, field_id, field_value)
     })
 
     try:
-        response = requests.request("PATCH", url, headers=headers, data=payload)
+        response = requests.request("PATCH", url, headers=headers, data=payload, timeout=15)
         if response.status_code in [200, 201, 204]:
-            print(f"Custom field {field_id} set to '{field_value}' for document #{document_id}")
+            logger.info(f"Custom field {field_id} set to '{field_value}' for document #{document_id}")
             return True
         else:
-            print(f"Failed to set custom field. Status code: {response.status_code}")
+            logger.error(f"Failed to set custom field. Status code: {response.status_code}")
             return False
 
-    except Exception as e:
-        print(f"Error connecting to paperless-ngx, is it running? Error: {e}")
+    except requests.RequestException as e:
+        logger.error(f"Error connecting to paperless-ngx, is it running? Error: {e}")
         return False
 
 
@@ -178,7 +184,7 @@ def remove_tag(access_token, base_url, document_id, tag_ids):
 
     # Get document
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=15)
 
         if response.status_code == 200:
             document_data = response.json()
@@ -190,18 +196,18 @@ def remove_tag(access_token, base_url, document_id, tag_ids):
 
             payload = json.dumps({"tags": current_tags})
 
-            response = requests.request("PATCH", url, headers=headers, data=payload)
+            response = requests.request("PATCH", url, headers=headers, data=payload, timeout=15)
 
             if response.status_code in [200, 201, 204]:
-                print(f"Removed tag IDs {tag_ids} from document #{document_id} after successful upload to lexoffice.")
+                logger.info(f"Removed tag IDs {tag_ids} from document #{document_id} after successful upload to lexoffice.")
                 return True
             else:
-                print(f"Failed to update document tags. Status code: {response.status_code}")
+                logger.error(f"Failed to update document tags. Status code: {response.status_code}")
                 return False
         else:
-            print(f"Failed to fetch document data. Status code: {response.status_code}")
+            logger.error(f"Failed to fetch document data. Status code: {response.status_code}")
             return False
 
-    except Exception as e:
-        print(f"Error connecting to paperless-ngx, is it running? Error: {e}")
+    except requests.RequestException as e:
+        logger.error(f"Error connecting to paperless-ngx, is it running? Error: {e}")
         return False
