@@ -9,14 +9,19 @@ class UploadStore:
     This class provides methods to check if a document has been uploaded
     and to mark documents as uploaded, using a SQLite database for storage.
     """
+
     def __init__(self, db_path="/data/upload_store.db"):
         """
         Initialize the UploadStore with a database file path.
 
         Args:
-            db_path (str): Path to the SQLite database file. Defaults to "upload_store.db".
+            db_path (str): Path to the SQLite database file. Defaults to "/data/upload_store.db".
         """
         self.db_path = db_path
+        # Ensure parent directory exists to avoid sqlite3.connect errors
+        parent = os.path.dirname(self.db_path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
         self._init_db()
 
     def _init_db(self):
@@ -25,11 +30,13 @@ class UploadStore:
         """
         with self._get_conn() as conn:
             conn.execute("""
-                CREATE TABLE IF NOT EXISTS uploaded_docs (
-                    doc_id TEXT PRIMARY KEY,
-                    upload_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
+                         CREATE TABLE IF NOT EXISTS uploaded_docs
+                         (
+                             doc_id TEXT PRIMARY KEY,
+                             upload_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                         )
+                         """)
+            conn.commit()
 
     @contextmanager
     def _get_conn(self):
