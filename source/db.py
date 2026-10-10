@@ -1,51 +1,58 @@
-import sqlite3
-from contextlib import contextmanager
+"""SQLite-backed record of which paperless-ngx documents reached lexoffice."""
+
 import os
+import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
+
+DEFAULT_DB_PATH = "/data/upload_store.db"
 
 
 class UploadStore:
     """
-    A class to track documents that have been uploaded to lexoffice.
+    Tracks the documents that have been uploaded to lexoffice.
 
-    This class provides methods to check if a document has been uploaded
-    and to mark documents as uploaded, using a SQLite database for storage.
+    Uploading is not idempotent on the lexoffice side - the same file posted
+    twice becomes two vouchers - so the daemon consults this store before every
+    upload. The store is a SQLite database and should live on a persistent
+    volume; see the "Database Persistence" section of the README.
     """
 
-    def __init__(self, db_path="/data/upload_store.db"):
+    def __init__(self, db_path: str = DEFAULT_DB_PATH) -> None:
         """
-        Initialize the UploadStore with a database file path.
+        Open the store, creating the database file and schema if needed.
 
         Args:
-            db_path (str): Path to the SQLite database file. Defaults to "/data/upload_store.db".
+            db_path: Path to the SQLite database file.
         """
         self.db_path = db_path
-        # Ensure parent directory exists to avoid sqlite3.connect errors
+        # Ensure the parent directory exists to avoid sqlite3.connect errors
         parent = os.path.dirname(self.db_path)
         if parent:
             os.makedirs(parent, exist_ok=True)
         self._init_db()
 
-    def _init_db(self):
-        """
-        Initialize the database by creating the necessary table if it doesn't exist.
-        """
+    def _init_db(self) -> None:
+        """Create the uploaded_docs table if it does not exist yet."""
         with self._get_conn() as conn:
-            conn.execute("""
-                         CREATE TABLE IF NOT EXISTS uploaded_docs
-                         (
-                             doc_id TEXT PRIMARY KEY,
-                             upload_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                         )
-                         """)
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS uploaded_docs
+                (
+                    doc_id           TEXT PRIMARY KEY,
+                    upload_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
             conn.commit()
 
     @contextmanager
-    def _get_conn(self):
+    def _get_conn(self) -> Iterator[sqlite3.Connection]:
         """
-        Context manager for database connections.
+        Open a database connection for the duration of the block.
 
         Yields:
-            sqlite3.Connection: A database connection that will be automatically closed.
+            A connection that is closed again when the block exits.
         """
         conn = sqlite3.connect(self.db_path)
         try:
@@ -53,37 +60,36 @@ class UploadStore:
         finally:
             conn.close()
 
-    def is_uploaded(self, doc_id):
+    def is_uploaded(self, doc_id: int | str) -> bool:
         """
-        Check if a document has already been uploaded.
+        Check whether a document has already been uploaded.
 
         Args:
-            doc_id (int or str): The ID of the document to check.
+            doc_id: ID of the document to check.
 
         Returns:
-            bool: True if the document has been uploaded, False otherwise.
+            True if the document has been uploaded before.
         """
         with self._get_conn() as conn:
             cursor = conn.execute(
                 "SELECT 1 FROM uploaded_docs WHERE doc_id = ?",
-                (str(doc_id),)
+                (str(doc_id),),
             )
             return cursor.fetchone() is not None
 
-    def mark_as_uploaded(self, doc_id):
+    def mark_as_uploaded(self, doc_id: int | str) -> None:
         """
-        Mark a document as uploaded in the database.
+        Record a document as uploaded.
+
+        Recording the same document twice is a no-op rather than an error, so a
+        retry that races an earlier success cannot break the sync loop.
 
         Args:
-            doc_id (int or str): The ID of the document to mark as uploaded.
+            doc_id: ID of the document to record.
         """
         with self._get_conn() as conn:
             conn.execute(
-                "INSERT INTO uploaded_docs (doc_id) VALUES (?)",
-                (str(doc_id),)
+                "INSERT OR IGNORE INTO uploaded_docs (doc_id) VALUES (?)",
+                (str(doc_id),),
             )
             conn.commit()
-
-
-if __name__ == "__main__":
-    store = UploadStore()

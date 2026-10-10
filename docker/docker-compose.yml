@@ -1,4 +1,3 @@
-version: '3'
 services:
   daemon:
     image: asyncura/paperless-to-lexoffice:latest
@@ -6,3 +5,8 @@ services:
     env_file:
       - docker-compose.env
     restart: unless-stopped
+    volumes:
+      # Keeps the record of uploaded documents across restarts and image
+      # updates. Without it, every tagged document is re-uploaded to lexoffice
+      # as a duplicate voucher after the container is recreated.
+      - ./data:/data

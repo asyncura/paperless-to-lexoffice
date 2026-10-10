@@ -1,6 +1,6 @@
 # Python
-__pycache__/
-*.py[cod]
+**/__pycache__/
+**/*.py[cod]
 *$py.class
 *.so
 .Python
@@ -44,6 +44,7 @@ temp/
 # Development and Test
 tests/
 test/
+**/test_*.py
 .env
 .venv
 env/

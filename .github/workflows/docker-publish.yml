@@ -23,8 +23,35 @@ env:
 
 
 jobs:
+  test:
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Install dependencies
+        run: |
+          pip install --no-cache-dir -r source/requirements.txt
+          pip install --no-cache-dir ruff==0.17.0
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Run tests
+        run: python -m unittest discover -s source -p 'test_*.py' -v
+
   build:
 
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read

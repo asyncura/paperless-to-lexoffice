@@ -1,0 +1,17 @@
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+src = ["source"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # import sorting
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests patch module attributes and assert on them; long mock chains are clearer unwrapped.
+"source/test_*.py" = ["E501"]

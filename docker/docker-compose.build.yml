@@ -1,0 +1,13 @@
+# Builds the image from this repository instead of pulling the published one.
+# Run from the repository's docker/ directory:
+#   docker compose -f docker-compose.build.yml up -d --build
+services:
+  daemon:
+    build: ..
+    image: paperless-to-lexoffice:local
+    container_name: paperless-to-lexoffice
+    env_file:
+      - docker-compose.env
+    restart: unless-stopped
+    volumes:
+      - ./data:/data
